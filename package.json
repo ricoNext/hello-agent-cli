@@ -4,5 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
   }
 }
