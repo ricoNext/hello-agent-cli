@@ -6,6 +6,7 @@
     "dev": "bun run src/index.ts"
   },
   "dependencies": {
-    "commander": "^14.0.3"
+    "commander": "^14.0.3",
+    "openai": "^6.34.0"
   }
 }
