@@ -1,8 +1,8 @@
 // 定义消息角色
-export type Role = 'user' | 'assistant' | 'system'
+export type Role = "user" | "assistant" | "system";
 
 // 定义消息接口
 export interface Message {
-  role: Role
-  content: string
+  content: string;
+  role: Role;
 }
