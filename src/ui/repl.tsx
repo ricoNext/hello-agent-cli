@@ -1,7 +1,7 @@
 import { Box, Text, useApp, useInput } from "ink";
 import { useState } from "react";
-import { streamChatCompletion } from "../agent/streamQuery.js";
-import type { ChatRow } from "../types/chatRow.js";
+import { streamChatCompletion } from "../agent/stream-query.js";
+import type { ChatRow } from "../types/chat-row.js";
 import type { Message } from "../types/message.js";
 
 /** 顶层定义，避免在热路径中重复创建正则（lint: performance） */

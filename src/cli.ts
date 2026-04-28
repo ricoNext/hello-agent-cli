@@ -1,5 +1,6 @@
 import { Command } from "commander";
-import { runQuery } from "./agent/query.js";
+
+const { runAgentPipe } = await import("./agent/loop.js");
 
 async function readStdinText(): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
@@ -50,12 +51,16 @@ export async function runCli(args: string[]): Promise<void> {
       // 无参数且非管道：进入交互 REPL
       if (!(prompt || opts.pipe)) {
         // 动态导入 `runRepl` 避免入口阻塞
-        const { runRepl } = await import("./ui/REPL.js");
+        const { runRepl } = await import("./ui/repl.js");
         await runRepl({ model: opts.model });
         return;
       }
 
-      await runQuery({ prompt, model: opts.model });
+      await runAgentPipe({
+        prompt,
+        model: opts.model,
+        maxTurns: Number(opts.maxTurns ?? 16),
+      });
     });
 
   // 子命令骨架：auth login / auth logout（先 stub，后续章节实现）
