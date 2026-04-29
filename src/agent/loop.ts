@@ -3,27 +3,38 @@ import type {
   ChatCompletionMessage,
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
-import { executeBash } from "../tools/bash.js";
-import { openaiTools } from "../tools/openai-tools.js";
+import { executeBash } from "../tools/bash";
+import { openaiTools } from "../tools/openai-tools";
+import { buildSystemPrompt } from "./context";
 
-const SYSTEM: ChatCompletionMessageParam = {
-  role: "system",
-  content:
-    "你是命令行里的编码助手。需要列文件、统计数量、跑测试时，优先用 bash 工具获取真实输出；不要编造命令结果。",
-};
+const BASE_SYSTEM =
+  "你是命令行里的编码助手。需要列文件、统计数量、跑测试时，优先用工具获取真实输出，不要编造结果。";
+
+let cachedSystemPrompt: string | null = null;
+
+async function getSystemPrompt(): Promise<string> {
+  if (cachedSystemPrompt) {
+    return cachedSystemPrompt;
+  }
+  cachedSystemPrompt = await buildSystemPrompt(BASE_SYSTEM);
+  return cachedSystemPrompt;
+}
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: process.env.OPENAI_BASE_URL,
 });
 
-export function callModel(
+export async function callModel(
   model: string,
   messages: ChatCompletionMessageParam[]
 ) {
+  const systemPrompt = await getSystemPrompt();
+
   return client.chat.completions.create({
     model,
-    messages: [SYSTEM, ...messages],
+    messages: [{ role: "system", content: systemPrompt }, ...messages],
+
     tools: openaiTools,
     tool_choice: "auto",
   });
