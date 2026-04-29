@@ -8,6 +8,13 @@
 
 **教程定位**：从 Claude Code 51 万行源码中提炼核心架构，用 5000 行代码实现 80% 的核心能力
 
+教程代码按照章节分别存放在对应的分支上， 例如:
+
+[01:50 行实现最小 Agent CLI](https://github.com/ricoNext/hello-agent-cli/tree/chapter-01)
+[02:生产级 CLI 入口的快路径设计](https://github.com/ricoNext/hello-agent-cli/tree/chapter-02)
+[03:流式输出与交互式 REPL](https://github.com/ricoNext/hello-agent-cli/tree/chapter-03)
+
+
 ---
 
 ## 第零部分：开始之前
