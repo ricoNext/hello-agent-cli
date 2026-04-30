@@ -11,8 +11,11 @@ import { buildSystemPrompt } from "./context";
 export interface RunAgentConversationOptions {
   maxTurns: number;
   model: string;
-  /** 进入工具轮时回调（用于 REPL 展示「正在调用工具」） */
+  // 流式输出最后一轮 assistant 的文本
+  onAssistantDelta?: (text: string) => void;
   onToolRound?: (info: { toolNames: string[] }) => void;
+  // 是否流式输出
+  streamFinalAssistant?: boolean;
 }
 
 const BASE_SYSTEM =
@@ -108,6 +111,31 @@ export async function runAgentConversation(
   const working: ChatCompletionMessageParam[] = [...initialMessages];
 
   for (let turn = 0; turn < opts.maxTurns; turn++) {
+    if (opts.streamFinalAssistant) {
+      const streamed = await callModelStreamFinalText({
+        model: opts.model,
+        messages: working,
+        onDelta: opts.onAssistantDelta,
+      });
+
+      if (streamed.kind === "tools") {
+        const msg = streamed.assistantMessage;
+        const names =
+          msg.tool_calls
+            ?.filter((t) => t.type === "function")
+            .map((t) => t.function.name) ?? [];
+        opts.onToolRound?.({ toolNames: names });
+
+        const chunk = await handleToolCalls(msg);
+        working.push(...chunk);
+        continue;
+      }
+
+      const text = streamed.text;
+      working.push({ role: "assistant", content: text });
+      return { messages: working, finalAssistantText: text };
+    }
+
     const res = await callModel(opts.model, working);
     const msg = res.choices[0]?.message;
     if (!msg) {
@@ -154,4 +182,59 @@ export async function runAgentPipe(opts: {
     console.error(m);
     process.exit(1);
   }
+}
+
+// 流式输出最后一轮 assistant 的文本类型定义
+// 如果最后一轮没有工具轮，则返回文本
+// 如果最后一轮有工具轮，则返回工具轮的 assistant message
+type StreamFinalResult =
+  | { kind: "text"; text: string }
+  | { kind: "tools"; assistantMessage: ChatCompletionMessage };
+
+// 流式输出最后一轮 assistant 的文本
+async function callModelStreamFinalText(opts: {
+  model: string;
+  messages: ChatCompletionMessageParam[];
+  onDelta?: (text: string) => void;
+}): Promise<StreamFinalResult> {
+  const systemPrompt = await getSystemPrompt();
+  const acc: string[] = [];
+  let sawToolCalls = false;
+
+  const stream = await client.chat.completions.create({
+    model: opts.model,
+    messages: [{ role: "system", content: systemPrompt }, ...opts.messages],
+    tools: openaiTools,
+    tool_choice: "auto",
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta;
+    if (delta?.tool_calls?.length) {
+      sawToolCalls = true;
+      break;
+    }
+
+    const piece = delta?.content ?? "";
+    if (piece) {
+      acc.push(piece);
+      opts.onDelta?.(piece);
+    }
+  }
+
+  if (!sawToolCalls) {
+    return { kind: "text", text: acc.join("") };
+  }
+
+  // 回退到第 6 章稳定路径，拿完整 message 再判断工具轮
+  const res = await callModel(opts.model, opts.messages);
+  const msg = res.choices[0]?.message;
+  if (!msg) {
+    throw new Error("模型未返回 message");
+  }
+  if (!msg.tool_calls?.length) {
+    return { kind: "text", text: msg.content ?? "" };
+  }
+  return { kind: "tools", assistantMessage: msg };
 }

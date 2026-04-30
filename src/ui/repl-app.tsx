@@ -96,6 +96,16 @@ export function REPLApp({
         await runAgentConversation(nextMessages, {
           model,
           maxTurns,
+          streamFinalAssistant: true,
+          onAssistantDelta: (piece) => {
+            setRows((prev) =>
+              prev.map((row) =>
+                row.id === botId
+                  ? { ...row, content: row.content + piece, streaming: true }
+                  : row
+              )
+            );
+          },
           onToolRound: ({ toolNames }) => {
             setRows((prev) =>
               prev.map((row) =>
