@@ -7,6 +7,14 @@ import { executeBash } from "../tools/bash";
 import { openaiTools } from "../tools/openai-tools";
 import { buildSystemPrompt } from "./context";
 
+/** 与 `-p`、REPL 共用的执行选项 */
+export interface RunAgentConversationOptions {
+  maxTurns: number;
+  model: string;
+  /** 进入工具轮时回调（用于 REPL 展示「正在调用工具」） */
+  onToolRound?: (info: { toolNames: string[] }) => void;
+}
+
 const BASE_SYSTEM =
   "你是命令行里的编码助手。需要列文件、统计数量、跑测试时，优先用工具获取真实输出，不要编造结果。";
 
@@ -84,6 +92,47 @@ async function handleToolCalls(
   return appended;
 }
 
+/**
+ * 运行 Agent 对话
+ * @param initialMessages 初始消息
+ * @param opts 执行选项
+ * @returns 最终消息和最后一轮助手消息
+ */
+export async function runAgentConversation(
+  initialMessages: ChatCompletionMessageParam[],
+  opts: RunAgentConversationOptions
+): Promise<{
+  messages: ChatCompletionMessageParam[];
+  finalAssistantText: string;
+}> {
+  const working: ChatCompletionMessageParam[] = [...initialMessages];
+
+  for (let turn = 0; turn < opts.maxTurns; turn++) {
+    const res = await callModel(opts.model, working);
+    const msg = res.choices[0]?.message;
+    if (!msg) {
+      throw new Error("模型未返回 message");
+    }
+
+    if (msg.tool_calls?.length) {
+      const names = msg.tool_calls
+        .filter((t) => t.type === "function")
+        .map((t) => t.function.name);
+      opts.onToolRound?.({ toolNames: names });
+
+      const chunk = await handleToolCalls(msg);
+      working.push(...chunk);
+      continue;
+    }
+
+    const text = msg.content ?? "";
+    working.push({ role: "assistant", content: text });
+    return { messages: working, finalAssistantText: text };
+  }
+
+  throw new Error(`已达到最大轮次 ${opts.maxTurns}，停止以防死循环。`);
+}
+
 export async function runAgentPipe(opts: {
   prompt: string;
   model: string;
@@ -94,29 +143,15 @@ export async function runAgentPipe(opts: {
     process.exit(1);
   }
 
-  const messages: ChatCompletionMessageParam[] = [
-    { role: "user", content: opts.prompt },
-  ];
-
-  for (let turn = 0; turn < opts.maxTurns; turn++) {
-    const res = await callModel(opts.model, messages);
-    const choice = res.choices[0];
-    const msg = choice?.message;
-    if (!msg) {
-      console.error("模型未返回 message");
-      process.exit(1);
-    }
-
-    if (msg.tool_calls?.length) {
-      const chunk = await handleToolCalls(msg);
-      messages.push(...chunk);
-      continue;
-    }
-
-    console.log(msg.content ?? "");
-    return;
+  try {
+    const { finalAssistantText } = await runAgentConversation(
+      [{ role: "user", content: opts.prompt }],
+      { model: opts.model, maxTurns: opts.maxTurns }
+    );
+    console.log(finalAssistantText);
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    console.error(m);
+    process.exit(1);
   }
-
-  console.error(`已达到最大轮次 ${opts.maxTurns}，停止以防死循环。`);
-  process.exit(1);
 }

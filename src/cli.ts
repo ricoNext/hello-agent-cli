@@ -1,6 +1,9 @@
 import { Command } from "commander";
 import { runQuery } from "./agent/query.js";
 
+// 定义最大轮次， 默认 16 轮
+const DEFAULT_MAX_TURNS = 16;
+
 async function readStdinText(): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     let data = "";
@@ -52,7 +55,10 @@ export async function runCli(args: string[]): Promise<void> {
       if (!(prompt || opts.pipe)) {
         // 动态导入 `runRepl` 避免入口阻塞
         const { runRepl } = await import("./ui/repl-app.js");
-        await runRepl({ model: opts.model });
+        await runRepl({
+          model: opts.model,
+          maxTurns: Number(opts.maxTurns ?? DEFAULT_MAX_TURNS),
+        });
         return;
       }
 
@@ -66,7 +72,7 @@ export async function runCli(args: string[]): Promise<void> {
         await runAgentPipe({
           prompt,
           model: opts.model,
-          maxTurns: Number(opts.maxTurns ?? 16),
+          maxTurns: Number(opts.maxTurns ?? DEFAULT_MAX_TURNS),
         });
         return;
       }

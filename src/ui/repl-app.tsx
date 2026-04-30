@@ -1,8 +1,8 @@
 import { Box, Text, useApp, useInput } from "ink";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { useState } from "react";
-import { streamChatCompletion } from "../agent/stream-query.js";
-import type { ChatRow } from "../types/chat-row.js";
-import type { Message } from "../types/message.js";
+import { runAgentConversation } from "../agent/loop";
+import type { ChatRow } from "../types/chat-row";
 
 /** 顶层定义，避免在热路径中重复创建正则（lint: performance） */
 const SLASH_CMD_SPLIT = /\s+/;
@@ -15,11 +15,17 @@ function roughTokens(text: string) {
   return Math.max(1, Math.ceil(text.length / 4));
 }
 
-export function REPLApp({ model }: { model: string }) {
+export function REPLApp({
+  model,
+  maxTurns,
+}: {
+  model: string;
+  maxTurns: number;
+}) {
   const { exit } = useApp();
   const [input, setInput] = useState("");
   const [rows, setRows] = useState<ChatRow[]>([]);
-  const [history, setHistory] = useState<Message[]>([]);
+  const [history, setHistory] = useState<ChatCompletionMessageParam[]>([]);
   const [busy, setBusy] = useState(false);
 
   useInput((ch, key) => {
@@ -58,7 +64,6 @@ export function REPLApp({ model }: { model: string }) {
 
   const submit = async (line: string) => {
     const trimmed = line.trim();
-    // 如果输入为空或正在请求，则返回
     if (!trimmed || busy) {
       return;
     }
@@ -68,67 +73,58 @@ export function REPLApp({ model }: { model: string }) {
       return;
     }
 
-    // 创建用户消息行
     const userRow: ChatRow = { id: uid(), role: "user", content: trimmed };
-
-    // 创建助手消息行
     const botId = uid();
 
-    // 更新终端消息列表
+    const userMsg: ChatCompletionMessageParam = {
+      role: "user",
+      content: trimmed,
+    };
+    const nextMessages: ChatCompletionMessageParam[] = [...history, userMsg];
+
     setRows((r) => [
       ...r,
       userRow,
       { id: botId, role: "assistant", content: "", streaming: true },
     ]);
-    // 更新对话历史
-    const nextHistory: Message[] = [
-      ...history,
-      { role: "user", content: trimmed },
-    ];
-    // 更新对话历史
-    setHistory(nextHistory);
-    // 更新是否正在请求
     setBusy(true);
 
-    // 记录开始时间
     const t0 = performance.now();
-    // 累加文本
-    let acc = "";
 
-    // 尝试流式请求
     try {
-      await streamChatCompletion({
-        model,
-        messages: nextHistory,
-        onDelta: (t) => {
-          // 累加文本
-          acc += t;
-          setRows((prev) =>
-            // 更新助手消息行
-            prev.map((row) =>
-              row.id === botId ? { ...row, content: row.content + t } : row
-            )
-          );
-        },
-      });
+      const { messages: after, finalAssistantText } =
+        await runAgentConversation(nextMessages, {
+          model,
+          maxTurns,
+          onToolRound: ({ toolNames }) => {
+            setRows((prev) =>
+              prev.map((row) =>
+                row.id === botId
+                  ? {
+                      ...row,
+                      content: `正在调用工具：${toolNames.join(", ") || "(未知)"}\n`,
+                    }
+                  : row
+              )
+            );
+          },
+        });
 
-      // --------------------流式请求完成之后的逻辑--------------------
-
-      // 计算请求时间
       const sec = ((performance.now() - t0) / 1000).toFixed(1);
-      // 创建完成提示
-      const footer = `[完成，约 ${roughTokens(acc)} tokens，${sec}s]`;
+      const footer = `\n[完成，约 ${roughTokens(finalAssistantText)} tokens，${sec}s]`;
 
-      // 更新助手消息行
       setRows((prev) =>
         prev.map((row) =>
           row.id === botId
-            ? { ...row, content: `${row.content}\n${footer}`, streaming: false }
+            ? {
+                ...row,
+                content: `${finalAssistantText}${footer}`,
+                streaming: false,
+              }
             : row
         )
       );
-      // 更新对话历史
-      setHistory((h) => [...h, { role: "assistant", content: acc }]);
+      setHistory(after);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setRows((prev) =>
@@ -143,6 +139,7 @@ export function REPLApp({ model }: { model: string }) {
     }
   };
 
+  // 运行斜杠命令
   const runSlash = (line: string): boolean => {
     const cmd = line.slice(1).trim().split(SLASH_CMD_SPLIT)[0]?.toLowerCase();
     if (cmd === "exit" || cmd === "quit") {
@@ -181,12 +178,15 @@ export function REPLApp({ model }: { model: string }) {
   );
 }
 
-export async function runRepl(opts: { model: string }): Promise<void> {
+export async function runRepl(opts: {
+  model: string;
+  maxTurns: number;
+}): Promise<void> {
   if (!process.env.OPENAI_API_KEY) {
     console.error("错误：请设置 OPENAI_API_KEY");
     process.exit(1);
   }
   const { render } = await import("ink");
-  const app = render(<REPLApp model={opts.model} />);
+  const app = render(<REPLApp maxTurns={opts.maxTurns} model={opts.model} />);
   await app.waitUntilExit();
 }
