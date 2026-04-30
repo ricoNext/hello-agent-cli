@@ -4,7 +4,8 @@
     "ink": "^7.0.1",
     "lodash-es": "^4.18.1",
     "openai": "^6.34.0",
-    "react": "^19.2.5"
+    "react": "^19.2.5",
+    "react-devtools-core": "^7.0.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
@@ -13,13 +14,25 @@
     "lefthook": "^2.1.6",
     "ultracite": "7.6.0"
   },
-  "name": "hello-agent-cli",
+  "bin": {
+    "hello-agent": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "name": "hello-agent",
+  "description": "A CLI agent tool",
   "scripts": {
-    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --target node --outfile dist/index.js",
+    "prepublishOnly": "bun run build",
     "check": "ultracite check",
-    "fix": "ultracite fix",
-    "prepare": "lefthook install"
+    "fix": "ultracite fix"
   },
   "type": "module",
-  "version": "0.3.0"
+  "version": "0.3.0",
+  "engines": {
+    "node": ">=24"
+  }
 }

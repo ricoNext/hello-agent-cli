@@ -1,5 +1,4 @@
-// src/index.ts
-// 注意：这个文件顶部不能有任何业务 import！
+#!/usr/bin/env node
 
 const VERSION = "0.3.0";
 
