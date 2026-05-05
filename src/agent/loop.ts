@@ -108,6 +108,21 @@ export async function runAgentConversation(
   messages: ChatCompletionMessageParam[];
   finalAssistantText: string;
 }> {
+  async function handleAssistantMessage(
+    msg: ChatCompletionMessage
+  ): Promise<{ done: boolean; text?: string }> {
+    if (msg.tool_calls?.length) {
+      const names = msg.tool_calls
+        .filter((t) => t.type === "function")
+        .map((t) => t.function.name);
+      opts.onToolRound?.({ toolNames: names });
+      const chunk = await handleToolCalls(msg);
+      working.push(...chunk);
+      return { done: false };
+    }
+    return { done: true, text: msg.content ?? "" };
+  }
+
   const working: ChatCompletionMessageParam[] = [...initialMessages];
 
   for (let turn = 0; turn < opts.maxTurns; turn++) {
@@ -118,44 +133,30 @@ export async function runAgentConversation(
         onDelta: opts.onAssistantDelta,
       });
 
-      if (streamed.kind === "tools") {
-        const msg = streamed.assistantMessage;
-        const names =
-          msg.tool_calls
-            ?.filter((t) => t.type === "function")
-            .map((t) => t.function.name) ?? [];
-        opts.onToolRound?.({ toolNames: names });
-
-        const chunk = await handleToolCalls(msg);
-        working.push(...chunk);
-        continue;
+      if (streamed.kind === "text") {
+        const text = streamed.text;
+        working.push({ role: "assistant", content: text });
+        return { messages: working, finalAssistantText: text };
       }
 
-      const text = streamed.text;
-      working.push({ role: "assistant", content: text });
-      return { messages: working, finalAssistantText: text };
+      const handled = await handleAssistantMessage(streamed.message);
+      if (handled.done) {
+        return { messages: working, finalAssistantText: handled.text ?? "" };
+      }
+      continue;
     }
 
+    // 第 6 章原逻辑（非流式）
     const res = await callModel(opts.model, working);
     const msg = res.choices[0]?.message;
     if (!msg) {
       throw new Error("模型未返回 message");
     }
 
-    if (msg.tool_calls?.length) {
-      const names = msg.tool_calls
-        .filter((t) => t.type === "function")
-        .map((t) => t.function.name);
-      opts.onToolRound?.({ toolNames: names });
-
-      const chunk = await handleToolCalls(msg);
-      working.push(...chunk);
-      continue;
+    const handled = await handleAssistantMessage(msg);
+    if (handled.done) {
+      return { messages: working, finalAssistantText: handled.text ?? "" };
     }
-
-    const text = msg.content ?? "";
-    working.push({ role: "assistant", content: text });
-    return { messages: working, finalAssistantText: text };
   }
 
   throw new Error(`已达到最大轮次 ${opts.maxTurns}，停止以防死循环。`);
@@ -189,7 +190,7 @@ export async function runAgentPipe(opts: {
 // 如果最后一轮有工具轮，则返回工具轮的 assistant message
 type StreamFinalResult =
   | { kind: "text"; text: string }
-  | { kind: "tools"; assistantMessage: ChatCompletionMessage };
+  | { kind: "tools"; message: ChatCompletionMessage };
 
 // 流式输出最后一轮 assistant 的文本
 async function callModelStreamFinalText(opts: {
@@ -197,44 +198,54 @@ async function callModelStreamFinalText(opts: {
   messages: ChatCompletionMessageParam[];
   onDelta?: (text: string) => void;
 }): Promise<StreamFinalResult> {
+  // 获取系统提示词， getSystemPrompt 函数前面章节已实现
   const systemPrompt = await getSystemPrompt();
+  // 初始化一个空数组， 用于存储流式输出的文本
   const acc: string[] = [];
+  // 初始化一个标志， 用于判断最后一轮 assistant 是否包含 `tool_calls`
   let sawToolCalls = false;
 
+  // 先尝试创建流式对话
   const stream = await client.chat.completions.create({
     model: opts.model,
     messages: [{ role: "system", content: systemPrompt }, ...opts.messages],
+    // 使用前面章节已实现的 openaiTools 工具
     tools: openaiTools,
     tool_choice: "auto",
+    // 设置流式输出
     stream: true,
   });
 
+  // 遍历流式对话的每一段
   for await (const chunk of stream) {
+    // delta 是流式对话的每一段的内容
     const delta = chunk.choices[0]?.delta;
+    // 重点来了： 只要发现有 `tool_calls` 信息
+    // 就跳出循环， 并且不消费流式对话的后续内容
     if (delta?.tool_calls?.length) {
       sawToolCalls = true;
       break;
     }
-
+    // 不带 `tool_calls` 信息， 才会走到这里
     const piece = delta?.content ?? "";
     if (piece) {
       acc.push(piece);
+      // 使用 onDelta 回调函数触发 REPL 的流式输出
       opts.onDelta?.(piece);
     }
   }
 
+  // 消费完  stream 之后，如果 sawToolCalls 为 false， 则返回流式输出的文本
   if (!sawToolCalls) {
     return { kind: "text", text: acc.join("") };
   }
 
-  // 回退到第 6 章稳定路径，拿完整 message 再判断工具轮
+  // 对于是 `tool_calls` 的情况，
+  // 我们直接调用 callModel 函数来获取完整的 assistant 消息
   const res = await callModel(opts.model, opts.messages);
   const msg = res.choices[0]?.message;
   if (!msg) {
     throw new Error("模型未返回 message");
   }
-  if (!msg.tool_calls?.length) {
-    return { kind: "text", text: msg.content ?? "" };
-  }
-  return { kind: "tools", assistantMessage: msg };
+  return { kind: "tools", message: msg };
 }

@@ -1,8 +1,15 @@
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, useApp, useInput } from "ink";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { useState } from "react";
+import manifest from "../../package.json" with { type: "json" };
 import { runAgentConversation } from "../agent/loop";
 import type { ChatRow } from "../types/chat-row";
+import {
+  ReplComposer,
+  ReplFooter,
+  ReplHeader,
+  ReplMessages,
+} from "./repl-layout";
 
 /** 顶层定义，避免在热路径中重复创建正则（lint: performance） */
 const SLASH_CMD_SPLIT = /\s+/;
@@ -13,6 +20,16 @@ function uid() {
 
 function roughTokens(text: string) {
   return Math.max(1, Math.ceil(text.length / 4));
+}
+
+interface ReplUIState {
+  focus: "composer" | "messages";
+  // 最近错误， 只有当状态为 'error' 时才有值
+  lastError?: string;
+  showFooter: boolean;
+  // 状态文本， 用于显示状态信息
+  // 可选值：ready、thinking、tool-running、error、cleared
+  statusText: "ready" | "thinking" | "tool-running" | "error" | "cleared";
 }
 
 export function REPLApp({
@@ -27,6 +44,12 @@ export function REPLApp({
   const [rows, setRows] = useState<ChatRow[]>([]);
   const [history, setHistory] = useState<ChatCompletionMessageParam[]>([]);
   const [busy, setBusy] = useState(false);
+
+  const [ui, setUI] = useState<ReplUIState>({
+    focus: "composer",
+    showFooter: true,
+    statusText: "ready",
+  });
 
   useInput((ch, key) => {
     if (busy) {
@@ -159,6 +182,7 @@ export function REPLApp({
     if (cmd === "clear") {
       setRows([]);
       setHistory([]);
+      setUI((s) => ({ ...s, statusText: "cleared", lastError: undefined }));
       return true;
     }
     if (cmd === "help") {
@@ -172,18 +196,22 @@ export function REPLApp({
   };
 
   return (
-    <Box flexDirection="column">
-      <Text bold color="cyan">
-        hello-agent-cli REPL · 模型 {model}
-      </Text>
-      {rows.map((row) => (
-        <Text dimColor={row.role === "user"} key={row.id}>
-          {row.role === "user" ? "> " : "◆ "}
-          {row.content}
-          {row.streaming ? "▋" : ""}
-        </Text>
-      ))}
-      <Text>{`> ${input}`}</Text>
+    <Box borderStyle="round" flexDirection="column">
+      <ReplHeader
+        busy={busy}
+        cwd={process.cwd()}
+        maxTurns={maxTurns}
+        model={model}
+        statusText={ui.statusText}
+        version={manifest.version}
+      />
+      <ReplMessages rows={rows} />
+      <ReplComposer busy={busy} input={input} />
+      <ReplFooter
+        lastError={ui.lastError}
+        showFooter={ui.showFooter}
+        statusText={ui.statusText}
+      />
     </Box>
   );
 }
