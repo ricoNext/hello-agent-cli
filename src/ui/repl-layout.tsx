@@ -99,7 +99,7 @@ export interface ReplMessagesProps {
 
 export function ReplMessages({ rows }: ReplMessagesProps) {
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <Box flexDirection="column" gap={1} paddingX={1}>
       {rows.length > 0 ? (
         rows.map((row) => {
           // 工具调用状态
