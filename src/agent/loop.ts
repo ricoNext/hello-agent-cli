@@ -51,12 +51,14 @@ export async function callModel(
   });
 }
 
+// 处理工具调用
 async function handleToolCalls(
   msg: ChatCompletionMessage
 ): Promise<ChatCompletionMessageParam[]> {
   const calls = msg.tool_calls ?? [];
   const appended: ChatCompletionMessageParam[] = [];
 
+  // 并发执行工具调用
   const results = await Promise.all(
     calls.map((tc) => {
       if (tc.type !== "function") {
@@ -66,7 +68,9 @@ async function handleToolCalls(
     })
   );
 
+  // 将原始消息添加到消息列表中
   appended.push(msg);
+  // 将工具调用的结果添加到消息列表中
   for (const r of results) {
     appended.push({ role: "tool", tool_call_id: r.id, content: r.body });
   }
