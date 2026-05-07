@@ -26,10 +26,8 @@ export function wasFileReadInSession(absPath: string): boolean {
 export function assertPathInsideCwd(absPath: string): string | null {
   const cwd = resolve(process.cwd());
   const rel = relative(cwd, absPath);
-  if (rel.startsWith("..") || rel === "") {
-    return rel === ""
-      ? "错误：目标路径不能等于工作区根目录本身"
-      : "错误：禁止访问工作区外的路径";
+  if (rel.startsWith("..")) {
+    return "错误：禁止访问工作区外的路径";
   }
   return null;
 }
