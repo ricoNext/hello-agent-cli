@@ -19,7 +19,7 @@ export interface RunAgentConversationOptions {
 }
 
 const BASE_SYSTEM =
-  "你是命令行里的编码助手。需要列文件、统计数量、跑测试时，优先用工具获取真实输出，不要编造结果。若用户明确要求「只转大小写、不访问磁盘」，优先使用 `uppercase` 工具";
+  "你是命令行里的编码助手。需要列文件、统计数量、跑测试时，优先用工具获取真实输出，不要编造结果。若用户明确要求「只转大小写、不访问磁盘」，优先使用 `uppercase` 工具。如果你需要修改文件，请先使用 `read_file` 工具读取文件，然后使用 `edit_file` 工具修改文件，最后使用 `write_file` 工具写入文件。";
 
 let cachedSystemPrompt: string | null = null;
 
