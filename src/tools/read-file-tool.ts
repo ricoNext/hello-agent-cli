@@ -105,6 +105,8 @@ export const readFileTool: AgentTool = {
     const out = slice
       .map((line, i) => {
         const n = offset + i;
+        // 格式化行号，使用 padStart 方法，保证行号长度为 6，不足时用空格填充
+        // 然后拼接行号和行内容，使用 → 分隔
         return `${String(n).padStart(6, " ")}→${line}`;
       })
       .join("\n");

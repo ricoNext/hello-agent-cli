@@ -28,10 +28,11 @@
     "build": "bun build src/index.ts --target node --outfile dist/index.js",
     "prepublishOnly": "bun run build",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "dev": "bun run src/index.ts"
   },
   "type": "module",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "engines": {
     "node": ">=24"
   }

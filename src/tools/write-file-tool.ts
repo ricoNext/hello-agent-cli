@@ -68,7 +68,7 @@ export const writeFileTool: AgentTool = {
       );
     }
 
-    // 创建目录
+    // 创建目录, 如果目录不存在则创建， 存在则忽略
     await fs.mkdir(dirname(abs), { recursive: true });
     // 写入文件
     await fs.writeFile(abs, content, "utf8");
