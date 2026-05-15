@@ -26,7 +26,13 @@ const BASE_SYSTEM =
   // 新增：搜索工具使用规范
   "查找文件名时使用 `glob` 工具（而非 bash find 或 ls）；" +
   "在文件内容中搜索时使用 `grep` 工具（而非 bash grep）；" +
-  "运行测试、构建、git 操作等需要「执行」语义的任务才使用 `bash` 工具。";
+  "运行测试、构建、git 操作等需要「执行」语义的任务才使用 `bash` 工具。" +
+  // 新增：网络与交互工具使用规范
+  "需要获取指定网页内容时使用 `web_fetch`（传入完整 URL）；" +
+  "需要查找最新资讯或不熟悉的技术时使用 `web_search`（传入关键词），" +
+  "搜到合适的 URL 后再用 `web_fetch` 深入阅读；" +
+  "需要向用户确认方案或补充关键信息时使用 `ask_user`，" +
+  "不要猜测或假设用户的意图，直接提问。";
 
 let cachedSystemPrompt: string | null = null;
 

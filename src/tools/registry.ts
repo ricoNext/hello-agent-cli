@@ -1,4 +1,5 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
+import { askUserTool } from "./ask-user-tool";
 import { bashTool } from "./bash-tool";
 import { editFileTool } from "./edit-file-tool";
 import { globTool } from "./glob-tool";
@@ -6,6 +7,8 @@ import { grepTool } from "./grep-tool";
 import { readFileTool } from "./read-file-tool";
 import type { AgentTool } from "./types";
 import { uppercaseTool } from "./uppercase-tool";
+import { webFetchTool } from "./web-fetch-tool";
+import { webSearchTool } from "./web-search-tool";
 import { writeFileTool } from "./write-file-tool";
 
 // 工具列表
@@ -17,6 +20,9 @@ export const AGENT_TOOLS: readonly AgentTool[] = [
   writeFileTool,
   globTool,
   grepTool,
+  webFetchTool,
+  askUserTool,
+  webSearchTool,
 ];
 
 // 工具名称匹配工具
