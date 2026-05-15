@@ -32,7 +32,7 @@ export const webSearchTool: AgentTool = {
       return "错误：query 为空";
     }
     try {
-      return await firecrawlSearch(query);
+      return await tavilySearch(query);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return `错误：搜索失败 — ${msg}`;
@@ -40,7 +40,7 @@ export const webSearchTool: AgentTool = {
   },
 };
 
-async function firecrawlSearch(query: string): Promise<string> {
+async function tavilySearch(query: string): Promise<string> {
   const apiKey = process.env.TIVLY_API_KEY;
   if (!apiKey) {
     return JSON.stringify({
@@ -51,6 +51,8 @@ async function firecrawlSearch(query: string): Promise<string> {
 
   const tvly = tavily({ apiKey });
 
+  // 官方返回值只定义了200的返回值类型，
+  // 404 等返回类型未定义， 这里使用联合类型定义了返回值
   const res = (await tvly.search(query, {
     limit: MAX_RESULTS,
   })) as TavilySearchResponse & { detail: { error: string } };

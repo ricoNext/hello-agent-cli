@@ -1,5 +1,4 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import { askUserTool } from "./ask-user-tool";
 import { bashTool } from "./bash-tool";
 import { editFileTool } from "./edit-file-tool";
 import { globTool } from "./glob-tool";
@@ -21,7 +20,6 @@ export const AGENT_TOOLS: readonly AgentTool[] = [
   globTool,
   grepTool,
   webFetchTool,
-  askUserTool,
   webSearchTool,
 ];
 
